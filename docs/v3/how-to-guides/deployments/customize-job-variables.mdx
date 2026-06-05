@@ -195,6 +195,43 @@ The job variables should be visible in the UI under the `Configuration` tab.
 ![Job variables in the UI](/v3/img/guides/job-variables.png)
 
 
+## Override the launch command
+
+Most work pool types expose a `command` job variable that controls the process Prefect runs to start a flow
+run. When it is not set, Prefect chooses the command automatically. In particular, when the pulled code contains a
+`pyproject.toml`, the runner may launch the flow with `uv run` (see
+[Python project dependencies in custom images](/v3/how-to-guides/deployments/store-flow-code#python-project-dependencies-in-custom-images)),
+which can build a new virtual environment and reinstall dependencies at runtime.
+
+If your image already has the project and its dependencies installed (for example, you ran
+`uv pip install --system -e .` at build time), you can pin the launch command so the flow runs against the
+existing interpreter instead of letting the runner pick `uv run`:
+
+```yaml
+deployments:
+- name: demo-deployment
+  entrypoint: demo_project/demo_flow.py:some_work
+  work_pool:
+    name: my-docker-pool
+    job_variables:
+        command: python -m prefect.flow_engine
+  schedule: null
+```
+
+With the `.deploy()` method, pass the same value:
+
+```python
+flow.from_source(...).deploy(
+    name="demo-deployment",
+    work_pool_name="my-docker-pool",
+    job_variables={"command": "python -m prefect.flow_engine"},
+)
+```
+
+You can also set `command` directly on the work pool's base job template to apply it to every deployment in that
+pool. This is a common fix for pre-built images on serverless infrastructure (such as Cloud Run), where rebuilding
+an environment on each cold start can cause out-of-memory errors, slower runs, and higher billing.
+
 ## Override job variables on a flow run
 
 When running flows, you can pass in job variables that override any values set on the work pool or deployment. 

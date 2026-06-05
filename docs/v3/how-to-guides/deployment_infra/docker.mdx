@@ -173,6 +173,14 @@ The generated Dockerfile installs dependencies from `requirements.txt`, but not 
 generate a `requirements.txt` file for the generated Dockerfile, or enable Prefect's
 [automatic dependency installation](/v3/how-to-guides/deployments/store-flow-code#python-project-dependencies-in-custom-images)
 when code is pulled at runtime.
+
+If you already install your project's dependencies at build time (for example with `uv pip install --system`),
+leave automatic dependency installation off. Enabling it when a `pyproject.toml` is present in the working
+directory can cause `uv` to build a fresh environment and reinstall dependencies on every flow run, which may
+trigger out-of-memory errors or slow cold starts. Keeping `pyproject.toml` out of the runtime working directory
+avoids this. See
+[Python project dependencies in custom images](/v3/how-to-guides/deployments/store-flow-code#python-project-dependencies-in-custom-images)
+for details.
 </Note>
 
 ### Automatically build a custom Docker image with a local Dockerfile

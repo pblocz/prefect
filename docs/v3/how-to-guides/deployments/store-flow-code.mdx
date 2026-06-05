@@ -607,6 +607,35 @@ dependencies. Verify each condition when debugging missing packages at runtime.
 If your custom image already contains the required project code and dependencies, leave
 `PREFECT_RUNNER_AUTO_INSTALL_DEPENDENCIES` unset or set it to `false`.
 
+##### Reuse an existing environment instead of building a new one
+
+When auto-install is enabled and `uv run` is used, Prefect tries to reuse an environment that is already
+materialized rather than creating a fresh `.venv` and reinstalling everything. It looks, in order, for:
+
+- `UV_PROJECT_ENVIRONMENT` pointing at an existing environment (relative paths are resolved against the project root),
+- an active `VIRTUAL_ENV` located under the project root,
+- a `.venv` directory at the project root, or
+- an editable install whose metadata points at the project root.
+
+If you bake dependencies into the image with `uv pip install --system`, set `UV_PROJECT_ENVIRONMENT` to the
+system prefix (or keep `PREFECT_RUNNER_AUTO_INSTALL_DEPENDENCIES` off entirely) so flow runs use the
+pre-installed packages instead of reinstalling them.
+
+<Warning>
+**Troubleshooting: dependencies reinstalled on every flow run.** If flow run logs show lines such as
+`Creating virtual environment at: .venv`, `Installed N packages`, or `Downloading <package>`, the runner is
+preparing dependencies at runtime. This can cause out-of-memory errors, slow cold starts, and higher billing,
+especially for large images on serverless infrastructure. To stop it, do any of the following:
+
+- Set `PREFECT_RUNNER_AUTO_INSTALL_DEPENDENCIES=false` (the default) in the image or work pool job variables.
+- Override the launch command so the runner uses the system interpreter — set the `command` job variable to
+  `python -m prefect.flow_engine` (see
+  [Override the launch command](/v3/how-to-guides/deployments/customize-job-variables#override-the-launch-command)).
+- Set `UV_PROJECT_ENVIRONMENT` to the environment that already has the dependencies installed.
+- Move `pyproject.toml` out of the deployment's working directory in the image so the runner does not detect a
+  project to prepare.
+</Warning>
+
 For more information, see [this discussion of custom Docker images](/v3/how-to-guides/deployment_infra/docker/#automatically-build-a-custom-docker-image-with-a-local-dockerfile).
 
 ## Blob storage
