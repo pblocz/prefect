@@ -2,7 +2,7 @@
 title: How to run flows in Docker containers
 sidebarTitle: Run flows in Docker containers
 description: Learn how to execute deployments in isolated Docker containers
-keywords: ["Docker", "container", "Docker work pool", "image", "Dockerfile"]
+keywords: ["Docker", "container", "Docker work pool", "image", "Dockerfile", "system dependencies", "apt-get", "libmagic"]
 ---
 
 In this example, you will set up:
@@ -278,6 +278,43 @@ See all the optional keyword arguments for the [`DockerImage` class](https://doc
     The above code builds an image with the format `<docker-registry-url>/<organization-or-username>/my_image:my_image_tag`
     when `PREFECT_DEFAULT_DOCKER_BUILD_NAMESPACE` is set.
 </Tip>
+
+### Install system dependencies in a custom image
+
+A `requirements.txt` file and the `EXTRA_PIP_PACKAGES` environment variable install Python packages only. Some Python
+packages rely on system-level (non-Python) libraries that must already be present in the image. For example,
+`python-magic` requires `libmagic`, `psycopg2` requires `libpq`, and `pdf2image` requires `poppler`. Install these
+libraries in a custom Dockerfile, because there is no runtime mechanism to add them the way `EXTRA_PIP_PACKAGES` adds
+Python packages.
+
+To add system libraries, extend one of Prefect's published images and install the packages with the base image's
+package manager:
+
+```Dockerfile system_deps.Dockerfile
+FROM prefecthq/prefect:3-latest
+
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y libmagic1 \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /requirements.txt
+RUN pip install -r /requirements.txt
+```
+
+Reference the Dockerfile from `DockerImage` as shown above, or build and push the image in your CI/CD pipeline and
+reference it in your work pool or deployment `job_variables`.
+
+<Warning>
+**Deployments can succeed while flow runs fail**
+
+Creating a deployment registers it with the Prefect API; it does not validate the runtime environment. A missing
+dependency surfaces only when a worker starts the flow run and imports your code, often as `ModuleNotFoundError` or, for
+a missing system library, an error such as `ImportError: failed to find libmagic. Check your installation`.
+
+To find which package pulled in a system library, inspect the failing run's traceback, then run
+`pipdeptree --reverse --packages python-magic` inside the image to trace the top-level dependency. Confirm the
+requirement is not from Prefect with `pipdeptree --packages prefect`.
+</Warning>
 
 ### Store your code in git-based cloud storage
 

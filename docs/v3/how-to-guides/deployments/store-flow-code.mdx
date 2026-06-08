@@ -607,6 +607,10 @@ dependencies. Verify each condition when debugging missing packages at runtime.
 If your custom image already contains the required project code and dependencies, leave
 `PREFECT_RUNNER_AUTO_INSTALL_DEPENDENCIES` unset or set it to `false`.
 
+Automatic installation and `EXTRA_PIP_PACKAGES` cover Python packages only. If a Python package depends on a
+system-level library (for example, `python-magic` needs `libmagic`), bake that library into a custom image. See
+[Install system dependencies in a custom image](/v3/how-to-guides/deployment_infra/docker/#install-system-dependencies-in-a-custom-image).
+
 For more information, see [this discussion of custom Docker images](/v3/how-to-guides/deployment_infra/docker/#automatically-build-a-custom-docker-image-with-a-local-dockerfile).
 
 ## Blob storage
