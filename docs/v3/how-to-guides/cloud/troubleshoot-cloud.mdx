@@ -216,6 +216,28 @@ If switching from local to remote execution results in local import errors, try 
 behavior by executing the flow locally with the `-m` flag (For example, `python -m flow` instead of `python flow.py`).
 Read more about `-m` in this [Stack Overflow post](https://stackoverflow.com/a/62923810).
 
+## Flow runs crash with `410 Gone` on concurrency lease renewal
+
+**Summary:** the run could not renew its deployment concurrency lease.
+
+If a deployment has a [concurrency limit](/v3/concepts/deployments#concurrency-limiting), each active run holds
+a lease that the Prefect runtime renews in the background while the run executes. When a renewal request fails—for
+example, because of transient API connectivity loss or server unavailability—the run is crashed with a
+`410 Gone` response, often surfaced as "Execution was cancelled by the runtime environment."
+
+This is most likely to affect long-running flows, since they hold a slot long enough to be exposed to transient
+renewal failures. Unlike [global concurrency limits](/v3/concepts/global-concurrency-limits), deployment
+concurrency does not let you tune the lease or tolerate renewal failures in place. To resolve it:
+
+- For deployments whose infrastructure is slow to start, increasing `grace_period_seconds` helps only with the
+pre-start window—it does not affect renewals during execution.
+- To reliably serialize long-running runs, migrate to a [global concurrency limit](/v3/how-to-guides/workflows/global-concurrency-limits),
+which lets you set the lease duration and use `raise_on_lease_renewal_failure=False` to tolerate transient
+renewal errors.
+
+See [How deployment concurrency is enforced](/v3/concepts/deployments#how-deployment-concurrency-is-enforced)
+for details.
+
 ## API tests return an unexpected 307 Redirected
 
 **Summary:** requests require a trailing `/` in the request URL.

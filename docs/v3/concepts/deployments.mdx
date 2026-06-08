@@ -265,7 +265,9 @@ deployment can be active at once. To enable this behavior, deployments have the 
     - `CANCEL_NEW`: new runs are canceled until a slot becomes available.
   - **`grace_period_seconds`**: the time in seconds to allow infrastructure to start before the concurrency
   slot is released. This is useful for deployments with slow-starting infrastructure. Must be between 60 and
-  86400 seconds. If not set, falls back to the server setting (default 300 seconds / 5 minutes).
+  86400 seconds. If not set, falls back to the server setting (default 300 seconds / 5 minutes). This setting
+  only governs the window between when a run claims a slot and when its infrastructure starts; it does not
+  extend or affect lease renewals while a run is executing (see [How deployment concurrency is enforced](#how-deployment-concurrency-is-enforced)).
 
 <CodeGroup>
 
@@ -310,6 +312,28 @@ my_flow.serve(
 ```
 
 </CodeGroup>
+
+#### How deployment concurrency is enforced
+
+Deployment concurrency limits use a lease-based mechanism. When a run claims a concurrency slot, the server
+issues a lease, and the Prefect runtime periodically renews that lease in the background for as long as the run
+is executing. When the run finishes (or its process exits), the lease is released so the slot becomes available
+again. Unlike [global concurrency limits](/v3/concepts/global-concurrency-limits), the lease duration and
+renewal interval for deployment concurrency are managed by Prefect and are not user-configurable.
+
+<Warning>
+If the runtime cannot renew a lease—for example, because of transient API connectivity loss or server
+unavailability—the run is crashed with a `410 Gone` response (surfaced as a message such as
+"Execution was cancelled by the runtime environment"). Deployment concurrency has no equivalent of the
+global concurrency limit `raise_on_lease_renewal_failure` option, so a failed renewal cannot be tolerated
+in place.
+</Warning>
+
+Deployment concurrency limits are best suited to capping how many runs of a deployment are active at once—for
+example, to avoid provisioning duplicate infrastructure. To reliably serialize long-running flows (where a
+single run holds a slot for many minutes or hours and is more exposed to transient renewal failures), prefer
+[global concurrency limits](/v3/concepts/global-concurrency-limits), which let you tune the lease duration and
+choose how lease renewal failures are handled with `strict` and `raise_on_lease_renewal_failure`.
 
 ### Metadata for bookkeeping
 

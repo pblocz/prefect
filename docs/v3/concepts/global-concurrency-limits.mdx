@@ -111,10 +111,18 @@ Prefect provides several mechanisms to control concurrency, each suited for diff
 | **Global concurrency limits** | Any Python operation | General-purpose concurrency control for database connections, API calls, or any resource |
 | [Work pool flow run limits](/v3/concepts/work-pools#manage-concurrency) | Flows in a work pool | Limit concurrent flows on specific infrastructure |
 | [Work queue flow run limits](/v3/concepts/work-pools#queue-concurrency-limits) | Flows in a work queue | Priority-based flow execution control |
-| [Deployment flow run limits](/v3/concepts/deployments#concurrency-limiting) | Specific deployment | Prevent concurrent runs of a specific deployment |
+| [Deployment flow run limits](/v3/concepts/deployments#concurrency-limiting) | Specific deployment | Cap concurrent runs of a specific deployment (lease-based; lease behavior is not user-configurable) |
 | [Tag-based task concurrency limits](/v3/concepts/tag-based-concurrency-limits) | Prefect tasks with tags | Limit concurrent Prefect task runs with specific tags |
 
 **Key distinction**: Global concurrency limits are the most flexible option—they can be applied to any Python-based operation, not just Prefect-specific objects. This makes them ideal for controlling access to external resources like databases, APIs, or file systems.
+
+<Note>
+Deployment flow run limits also rely on timed leases, but their lease duration and renewal behavior are managed
+by Prefect and cannot be configured. A run whose lease renewal fails is crashed (`410 Gone`) with no
+`raise_on_lease_renewal_failure` escape hatch. To serialize long-running flows, prefer global concurrency
+limits, where you can tune the lease duration and tolerate transient renewal failures. See
+[How deployment concurrency is enforced](/v3/concepts/deployments#how-deployment-concurrency-is-enforced).
+</Note>
 
 ## Use cases
 
