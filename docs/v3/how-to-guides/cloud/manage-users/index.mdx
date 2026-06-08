@@ -30,6 +30,10 @@ Admins on Pro and Enterprise tier Prefect Cloud accounts can grant members of th
 [roles](/v3/how-to-guides/cloud/manage-users/manage-roles) in a workspace, such as Runner or Viewer.
 Custom roles are available on Enterprise tier accounts.
 
+Each member of an account consumes a billable seat, whether they are added by invitation or provisioned through
+[single sign-on](/v3/how-to-guides/cloud/manage-users/configure-sso#seats-and-billing). See the
+[Prefect Cloud plans](https://www.prefect.io/pricing) for seat and pricing details.
+
 ## API keys
 
 [API keys](/v3/how-to-guides/cloud/manage-users/api-keys) enable you to authenticate an environment to work with Prefect Cloud.
@@ -39,7 +43,7 @@ Custom roles are available on Enterprise tier accounts.
 [Service accounts](/v3/how-to-guides/cloud/manage-users/service-accounts) enable you to create a
 Prefect Cloud API key that is not associated with a user account.
 
-## Single sign-on (Pro)
+## Single sign-on (Enterprise)
 
 Enterprise tier plans offer [single sign-on (SSO)](/v3/how-to-guides/cloud/manage-users/configure-sso/)
 integration with your team's identity provider, including options for

@@ -17,6 +17,12 @@ Members of your Prefect Cloud account will log in and authenticate using your id
 Once your SSO integration is set up, non-admins are required to authenticate through the SSO provider when 
 accessing account resources.
 
+<Note>
+Enabling SSO changes only how users authenticate—it does not import your identity provider's directory or 
+automatically create Prefect Cloud members. Users in your identity provider tenant are not billed unless they 
+become members of your Prefect Cloud account. See [Seats and billing](#seats-and-billing) for details.
+</Note>
+
 See the [Prefect Cloud plans](https://www.prefect.io/pricing) to learn more about options for supporting more users and 
 workspaces, service accounts, and SSO.
 
@@ -42,14 +48,38 @@ Once you complete SSO configuration, your users must authenticate through your i
 **Directory sync** automatically provisions and de-provisions users for your account.
 
 Provisioned users are given basic “Member” roles and have access to any resources that role entails.
+Only users assigned to the Prefect Cloud application in your identity provider are provisioned—directory sync does 
+not import your entire tenant. A user becomes a member when they first sign in through SSO (just-in-time provisioning) 
+or when your identity provider assigns them to the application.
 
 When a user is unassigned from the Prefect Cloud application in your identity provider, they automatically lose access to 
-Prefect Cloud resources. This allows your IT team to control access to Prefect Cloud without signing into the Prefect UI.
+Prefect Cloud resources and their seat is freed. This allows your IT team to control access to Prefect Cloud without 
+signing into the Prefect UI.
+
+To control which users become members—and therefore consume seats—scope the Prefect Cloud application assignment in 
+your identity provider to specific groups rather than to all users in your tenant.
 
 ## SCIM Provisioning
 
 Enterprise plans have access to SCIM for user provisioning.
 The SSO tab provides access to enable SCIM provisioning.
+Like directory sync, SCIM provisions only the users and groups your identity provider pushes to Prefect Cloud, so 
+unassigned users in your tenant are neither created nor billed.
+
+## Seats and billing
+
+Each member of your Prefect Cloud account consumes a billable seat. Enabling SSO does not add seats on its own—a user 
+in your identity provider tenant only consumes a seat once they become a member of your account.
+
+A user becomes a member in one of the following ways:
+
+- An Admin [invites](/v3/how-to-guides/cloud/manage-users) them to the account (the default).
+- They sign in through SSO for the first time when directory sync is enabled (just-in-time provisioning).
+- Your identity provider assigns them through directory sync or SCIM.
+
+If adding or provisioning a user would exceed your account's seat limit, the user is not added and an Admin is notified 
+by email until a seat becomes available. Removing a member—or deprovisioning them in your identity provider—frees the 
+seat. See the [Prefect Cloud plans](https://www.prefect.io/pricing) for seat and pricing details.
 
 ## GitHub Enterprise Cloud with SAML/SSO
 
