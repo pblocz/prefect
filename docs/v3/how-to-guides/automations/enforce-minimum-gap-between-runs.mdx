@@ -1,0 +1,152 @@
+---
+title: Enforce a minimum gap between flow runs
+description: Choose between deployment concurrency, self-scheduling hooks, paired pause/resume automations, and held concurrency leases to keep a fixed cooldown between runs.
+---
+
+A "minimum gap" or cooldown means: after a flow run **finishes**, no new run of the
+same deployment should start for some fixed duration, no matter how many triggering
+events fire in between.
+
+This is a different requirement from the ones the built-in scheduling controls solve:
+
+- A deployment-level `concurrency_limit` serializes execution but allows runs to start
+  back-to-back the instant the previous one finishes.
+- A trigger's `schedule_after` delays each event by a fixed amount measured from the
+  **event timestamp**, not from the prior run's completion, so bursts of events still
+  produce bursts of runs (see the [`schedule_after` warning](/v3/how-to-guides/automations/creating-deployment-triggers#scheduling-delayed-deployment-runs)).
+- A `prefect.flow-run.Completed` trigger with a delayed action fires once per matching
+  event, so a burst of events still results in a burst of scheduled actions.
+
+The patterns below all enforce the cooldown correctly under bursty inputs, but they
+differ in where the wait happens, whether the cluster sits idle during the gap, and
+whether they require code changes.
+
+## Choosing a pattern
+
+| Pattern | Code change? | Cluster idle during gap? | Works when other things also trigger the deployment? | Failure mode |
+| --- | --- | --- | --- | --- |
+| [Deployment `concurrency_limit` + post-work `sleep`](#deployment-concurrency-with-a-post-work-sleep) | Yes (one `sleep`) | No — slot is held by the sleeping run | Yes | Worker process death releases the slot immediately |
+| [Self-scheduling via an `on_completion` hook](#self-scheduling-via-an-on_completion-hook) | Yes (one hook) | Yes | **No** — disable all other triggers, schedules, and manual runs | Hook failure skips the next run |
+| [Paired `pause-deployment` / `resume-deployment` automations](#paired-pause-resume-automations) | No | Yes | **No** — paused deployments reject all run sources | Missed resume automation leaves the deployment paused |
+| [Held global concurrency lease](#held-global-concurrency-lease) | Yes | No — slot is held | Yes | Lease expiration releases the slot |
+
+## Deployment concurrency with a post-work `sleep`
+
+Set the deployment's `concurrency_limit` to `1` and sleep at the end of the flow:
+
+```python
+import time
+from prefect import flow
+
+@flow
+def my_flow():
+    do_work()
+    time.sleep(600)  # 10-minute cooldown before the next run can start
+```
+
+Queued events accumulate during the sleep and the next run starts immediately after
+`time.sleep` returns. Set the deployment's `concurrency_options.collision_strategy`
+to control whether overlapping work is enqueued or dropped:
+
+```yaml
+deployments:
+  - name: cooldown-flow
+    entrypoint: flow.py:my_flow
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE  # or CANCEL_NEW to drop bursts
+```
+
+This is the simplest correct pattern when you don't mind a worker slot being held
+during the cooldown.
+
+## Self-scheduling via an `on_completion` hook
+
+Disable every other source of runs (schedules, triggers, manual runs) and have each
+run schedule its own successor:
+
+```python
+from datetime import datetime, timedelta, timezone
+
+from prefect import flow
+from prefect.deployments import run_deployment
+
+
+def schedule_next(flow, flow_run, state):
+    run_deployment(
+        name="my-flow/cooldown-flow",
+        scheduled_time=datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+
+
+@flow(on_completion=[schedule_next])
+def my_flow():
+    do_work()
+```
+
+The cluster is idle during the gap because the next run does not exist until the
+hook fires. The trade-off is that this deployment must be the **single** source of
+new runs — if anything else (an event trigger, a schedule, a manual UI run) can
+also create runs, this pattern stops enforcing the cooldown.
+
+## Paired pause/resume automations
+
+A no-code pattern that uses two automations and the `pause-deployment` /
+`resume-deployment` actions:
+
+1. **Reactive automation.** Trigger: `prefect.flow-run.Completed` event matched to
+   your deployment. Action: `pause-deployment` (infer the deployment from the
+   triggering event).
+2. **Proactive automation.** Trigger: same `prefect.flow-run.Completed` event,
+   `posture: Proactive`, `within: 600`, `threshold: 1`. Action: `resume-deployment`
+   (same inferred deployment).
+
+When a run completes, the first automation pauses the deployment immediately. Ten
+minutes later, if no further completion event has reset the proactive window, the
+second automation resumes the deployment. Any events that arrived during the paused
+window are rejected at the deployment level rather than queued, so the cluster sits
+idle.
+
+<Warning>
+`pause-deployment` blocks **every** source of new runs, including schedules, other
+event triggers, and manual API or UI runs. Use this pattern only on deployments
+where the cooldown applies to all run sources. See the action semantics note in
+the [automations concepts page](/v3/concepts/automations#actions) for details.
+</Warning>
+
+## Held global concurrency lease
+
+Use a global concurrency limit named for the cooldown and hold the slot across the
+wait:
+
+```python
+import time
+
+from prefect import flow
+from prefect.concurrency.sync import concurrency
+
+
+@flow
+def my_flow():
+    # lease_duration is the safety net: if this worker dies, the slot is
+    # released after 30 minutes instead of blocking the limit forever.
+    with concurrency("my-flow-cooldown", lease_duration=1800):
+        do_work()
+        time.sleep(600)
+```
+
+Create a global concurrency limit named `my-flow-cooldown` with `limit: 1`. Any
+other run that tries to acquire the slot — including runs started by triggers
+firing during the cooldown — blocks in `AwaitingConcurrencySlot` until the sleep
+finishes. Unlike the deployment-concurrency pattern, the same named slot can
+coordinate runs across multiple deployments.
+
+The lease is best-effort: if the worker process crashes mid-run, the slot is
+released when the lease expires (default 5 minutes, minimum 1 minute). Pick a
+`lease_duration` longer than your worst-case run plus cooldown.
+
+## Further reading
+
+- [Creating deployment triggers](/v3/how-to-guides/automations/creating-deployment-triggers)
+- [Global concurrency limits](/v3/concepts/global-concurrency-limits)
+- [Automations](/v3/concepts/automations)

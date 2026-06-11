@@ -341,6 +341,29 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Enforce a minimum gap between runs
+
+You can hold a concurrency slot across a cooldown window to prevent the next run from starting until a fixed amount of time has elapsed since the previous one completed. Acquire the slot at the start of the work, do the work, then `sleep` for the cooldown before releasing:
+
+```python
+import time
+
+from prefect import flow
+from prefect.concurrency.sync import concurrency
+
+
+@flow
+def cooldown_protected_flow():
+    # Hold the slot for up to 30 minutes if the worker crashes mid-run.
+    with concurrency("daily-export", lease_duration=1800):
+        do_work()
+        # Keep the slot held for 10 minutes after the work finishes so
+        # any queued runs have to wait out the cooldown.
+        time.sleep(600)
+```
+
+Pair this with a global concurrency limit of `1` for the named slot to serialize runs. The `lease_duration` is a safety net: if the worker process dies, the slot is released after the lease expires rather than blocking the limit forever. See [Enforce a minimum gap between flow runs](/v3/how-to-guides/automations/enforce-minimum-gap-between-runs) for a comparison with the no-code automation alternatives.
+
 ## Next steps
 
 For more information about how global concurrency limits work and when to use them versus other concurrency controls, see the [global concurrency limits concept page](/v3/concepts/global-concurrency-limits).

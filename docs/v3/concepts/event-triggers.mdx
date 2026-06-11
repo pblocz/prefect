@@ -41,6 +41,31 @@ This is the schema that defines an event trigger:
 | **within**        | number                    | N/A                         | The time period over which the events must occur. For Reactive triggers, this may be as low as 0 seconds, but must be at least 10 seconds for Proactive triggers.                                                                                                                                                                                     |
 
 
+#### What happens after a trigger fires
+
+When a deployment trigger fires with a `run-deployment` action (the default for triggers
+defined on a deployment), the server does **not** start the flow run inline. It performs
+the following sequence:
+
+1. A flow run is created in the `Scheduled` state with
+   `scheduled_start_time = event.occurred + schedule_after` (the trigger's
+   `schedule_after` defaults to zero).
+2. A worker polling the deployment's work pool eventually picks the run up and
+   transitions it to `Pending`, then `Running`.
+3. If a deployment-level `concurrency_limit` or a global concurrency limit referenced
+   by the flow is saturated, the run sits in `AwaitingConcurrencySlot` instead of
+   `Running` until a slot frees.
+4. If no worker picks the run up before its scheduled time plus the work pool's late
+   threshold, the run is marked `Late`. `Late` runs still execute as soon as a worker
+   becomes available.
+
+This is why a triggered run can appear "queued" rather than starting instantly: the run
+has been created and is waiting on a worker poll, a concurrency slot, or its scheduled
+start time, in that order. To enforce a minimum gap between the completion of one run
+and the start of the next — independent of how many events fire in between — see
+[Enforce a minimum gap between flow runs](/v3/how-to-guides/automations/enforce-minimum-gap-between-runs).
+
+
 ### Resource matching
 
 Both the `event` and `metric` triggers support matching events for specific resources in your workspace, including most

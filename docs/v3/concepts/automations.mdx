@@ -55,8 +55,8 @@ Actions specify what your automation does when its trigger criteria are met. Cur
 | Suspend a flow run | `suspend-flow-run` | All |
 | Resume a flow run | `resume-flow-run` | All |
 | Run a deployment | `run-deployment` | All |
-| Pause a deployment schedule | `pause-deployment` | All |
-| Resume a deployment schedule | `resume-deployment` | All |
+| Pause a deployment | `pause-deployment` | All |
+| Resume a deployment | `resume-deployment` | All |
 | Pause a work pool | `pause-work-pool` | All |
 | Resume a work pool | `resume-work-pool` | All |
 | Pause a work queue | `pause-work-queue` | All |
@@ -72,6 +72,14 @@ Actions specify what your automation does when its trigger criteria are met. Cur
 
 <Note>
 The `send-email-notification` and `declare-incident` actions are only available in Prefect Cloud.
+</Note>
+
+<Note>
+Several actions have side effects worth calling out explicitly:
+
+- `pause-deployment` blocks **every** source of new runs for the target deployment — schedules, event triggers, automation `run-deployment` actions, and manual API calls — not just the deployment's schedule. It does **not** cancel runs that are already in `Scheduled` or `AwaitingConcurrencySlot`; those still execute when their turn comes. `resume-deployment` re-enables the same sources.
+- `pause-work-pool` and `pause-work-queue` stop workers from picking up runs, but runs continue to accumulate in `Scheduled` and `Late`.
+- `cancel-flow-run` and `change-flow-run-state` only affect the specific run identified by the inferred or selected resource; they do not stop the trigger that produced it from firing again.
 </Note>
 
 

@@ -67,6 +67,19 @@ The `schedule_after` field accepts:
 - **Seconds as integer** (e.g., 7200 for 2 hours)
 - **Python timedelta objects** in code
 
+<Warning>
+`schedule_after` is **not** a cooldown between runs. The delay is measured from the
+**event timestamp**, not from the completion of any previous run, and every matching
+event still creates its own scheduled run. If two events arrive a minute apart with
+`schedule_after: PT10M`, you get two runs scheduled a minute apart — not one run
+ten minutes after the previous one completed. A deployment-level `concurrency_limit`
+will serialize execution but the runs still queue up against one another and start
+back-to-back once a slot frees.
+
+To enforce a minimum gap between the **completion** of one run and the **start** of
+the next, see [Enforce a minimum gap between flow runs](/v3/how-to-guides/automations/enforce-minimum-gap-between-runs).
+</Warning>
+
 This deployment creates a flow run when an `external.resource.pinged` event _and_ an `external.resource.replied`
 event have been seen from `my.external.resource`:
 
